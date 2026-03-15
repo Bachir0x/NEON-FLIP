@@ -22,16 +22,13 @@ const config = {
   height: 600,
   parent: 'game',
   backgroundColor: '#0a001f',
-  physics: {
-    default: 'arcade',
-    arcade: { gravity: { y: 0 }, debug: false }
-  },
+  physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
   scene: { preload, create, update }
 };
 
 let game;
 let player;
-let gravityDir = 1;           // 1 = down, -1 = up
+let gravityDir = 1;
 let score = 0;
 let highScore = localStorage.getItem('neonflip_hs') || 0;
 let combo = 0;
@@ -40,49 +37,39 @@ let speed = 4;
 let orbs = [];
 let obstacles = [];
 let particles;
-let scoreText, comboText, highText, gameOverText;
+let scoreText, comboText, highText;
 let gameOverFlag = false;
 let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function preload() {}
 
 function create() {
-  // Background
   const bg = this.add.graphics();
-  bg.fillStyle(0x1a0033, 1);
-  bg.fillRect(0,0,800,600);
+  bg.fillStyle(0x1a0033, 1); bg.fillRect(0,0,800,600);
   for (let i = 0; i < 20; i++) {
     bg.lineStyle(2, 0x00ffff, 0.12);
     bg.lineBetween(i*50,0,i*50,600);
     bg.lineBetween(0,i*50,800,i*50);
   }
 
-  // Player – glowing neon square
   player = this.add.rectangle(180, 300, 52, 52, 0x00ffea);
   player.setStrokeStyle(7, 0xff00ff);
   this.physics.add.existing(player);
   player.body.setCollideWorldBounds(true);
   player.body.setBounce(0.5);
 
-  // Particles
   particles = this.add.particles(0,0,null,{
-    speed: 140,
-    scale: { start: 0.9, end: 0 },
-    lifespan: 450,
-    blendMode: 'ADD'
+    speed: 140, scale: { start: 0.9, end: 0 }, lifespan: 450, blendMode: 'ADD'
   });
 
-  // UI
-  scoreText  = this.add.text(24, 18, '00000', {fontSize:'38px', color:'#00ffea', fontFamily:'Courier New'}).setShadow(0,0,'#ff00ff',9);
-  highText   = this.add.text(24, 68, `HI ${String(highScore).padStart(5,'0')}`, {fontSize:'20px', color:'#ff66cc'});
-  comboText  = this.add.text(400, 90, '', {fontSize:'72px', color:'#ffff00', fontFamily:'Courier New'}).setOrigin(0.5).setAlpha(0);
+  scoreText = this.add.text(24, 18, '00000', {fontSize:'38px', color:'#00ffea', fontFamily:'Courier New'}).setShadow(0,0,'#ff00ff',9);
+  highText  = this.add.text(24, 68, `HI ${String(highScore).padStart(5,'0')}`, {fontSize:'20px', color:'#ff66cc'});
+  comboText = this.add.text(400, 90, '', {fontSize:'72px', color:'#ffff00', fontFamily:'Courier New'}).setOrigin(0.5).setAlpha(0);
 
-  // Controls
   this.input.on('pointerdown', flipGravity, this);
   this.input.keyboard.on('keydown-SPACE', flipGravity, this);
   this.input.keyboard.on('keydown-ENTER', flipGravity, this);
 
-  // Initial items
   for (let i = 0; i < 7; i++) spawnOrb(this);
   for (let i = 0; i < 3; i++) spawnObstacle(this);
 }
@@ -91,27 +78,21 @@ function update(time, delta) {
   if (gameOverFlag) return;
 
   speed = 4 + Math.floor(score / 900);
-
-  // Move player forward
   player.x += speed * 1.25;
-
-  // Gravity flip effect
   player.body.velocity.y = 420 * gravityDir;
 
-  // Keep player visible
   if (player.x > 760) player.x = 760;
   if (player.x < 100) player.x = 100;
 
-  // Spawning
-  if (Math.random() < 0.035 + speed/350) spawnOrb(this.scene);
-  if (Math.random() < 0.018 + speed/600) spawnObstacle(this.scene);
+  // SPAWN (fixed)
+  if (Math.random() < 0.035 + speed/350) spawnOrb(this);
+  if (Math.random() < 0.018 + speed/600) spawnObstacle(this);
 
-  // Update collectibles & hazards
   orbs.forEach((o,i) => {
     o.x -= speed;
     if (o.x < -60) { o.destroy(); orbs.splice(i,1); return; }
     if (Phaser.Geom.Intersects.RectangleToRectangle(player.getBounds(), o.getBounds())) {
-      collect(o, this.scene);
+      collect(o, this);   // ← fixed
     }
   });
 
@@ -119,22 +100,19 @@ function update(time, delta) {
     o.x -= speed * 1.12;
     if (o.x < -120) { o.destroy(); obstacles.splice(i,1); return; }
     if (Phaser.Geom.Intersects.RectangleToRectangle(player.getBounds(), o.getBounds())) {
-      gameOver(this.scene);
+      gameOver(this);     // ← fixed
     }
   });
 
-  // Combo decay
   if (combo > 0) {
     comboTimer -= delta;
     if (comboTimer <= 0) combo = 0;
   }
   comboText.setAlpha(Math.max(0, comboTimer/1000));
 
-  // Distance score
   score += 0.28;
   scoreText.setText(Math.floor(score).toString().padStart(5,'0'));
   
-  // Trail
   particles.emitParticleAt(player.x-38, player.y + gravityDir*24, 1);
 }
 
@@ -168,7 +146,6 @@ function collect(orb, scene) {
   comboTimer = 1400;
   comboText.setText('×'+combo).setAlpha(1);
 
-  // Particle burst
   for (let i = 0; i < 22; i++) particles.emitParticleAt(orb.x, orb.y);
 
   playPop(orb.radius||20);
@@ -182,9 +159,7 @@ function gameOver(scene) {
   gameOverFlag = true;
   playCrash();
 
-  // Explosion
   for (let i = 0; i < 80; i++) particles.emitParticleAt(player.x, player.y);
-
   scene.cameras.main.shake(800, 0.014);
 
   if (score > highScore) {
@@ -192,66 +167,43 @@ function gameOver(scene) {
     localStorage.setItem('neonflip_hs', highScore);
   }
 
-  // Game Over overlay
-  gameOverText = scene.add.text(400, 240, 'GAME OVER', {
-    fontSize:'80px', color:'#ff0066', fontFamily:'Courier New'
-  }).setOrigin(0.5).setShadow(0,0,'#ffff00',18);
-
-  scene.add.text(400, 340, `SCORE ${Math.floor(score)}`, {
-    fontSize:'36px', color:'#00ffea'
-  }).setOrigin(0.5);
-
-  scene.add.text(400, 420, 'TAP / SPACE / ENTER → RESTART', {
-    fontSize:'24px', color:'#cccccc'
-  }).setOrigin(0.5);
+  scene.add.text(400, 240, 'GAME OVER', {fontSize:'80px', color:'#ff0066', fontFamily:'Courier New'}).setOrigin(0.5).setShadow(0,0,'#ffff00',18);
+  scene.add.text(400, 340, `SCORE ${Math.floor(score)}`, {fontSize:'36px', color:'#00ffea'}).setOrigin(0.5);
+  scene.add.text(400, 420, 'TAP / SPACE / ENTER → RESTART', {fontSize:'24px', color:'#cccccc'}).setOrigin(0.5);
 
   scene.input.once('pointerdown', ()=>location.reload());
   scene.input.keyboard.once('keydown-SPACE', ()=>location.reload());
   scene.input.keyboard.once('keydown-ENTER', ()=>location.reload());
 }
 
-// ────── PROCEDURAL AUDIO ──────
+// ────── SOUNDS ──────
 function playFlip() {
-  const osc = audioCtx.createOscillator();
-  osc.type = 'sawtooth';
+  const osc = audioCtx.createOscillator(); osc.type = 'sawtooth';
   osc.frequency.setValueAtTime(1100, audioCtx.currentTime);
-  const g = audioCtx.createGain();
-  g.gain.setValueAtTime(0.28, audioCtx.currentTime);
+  const g = audioCtx.createGain(); g.gain.setValueAtTime(0.28, audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.16);
-  osc.connect(g).connect(audioCtx.destination);
-  osc.start();
-  osc.stop(audioCtx.currentTime+0.18);
+  osc.connect(g).connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime+0.18);
 }
-
 function playPop(size) {
-  const osc = audioCtx.createOscillator();
-  osc.type = 'sine';
+  const osc = audioCtx.createOscillator(); osc.type = 'sine';
   osc.frequency.setValueAtTime(700 + size*15, audioCtx.currentTime);
-  const g = audioCtx.createGain();
-  g.gain.setValueAtTime(0.55, audioCtx.currentTime);
+  const g = audioCtx.createGain(); g.gain.setValueAtTime(0.55, audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.28);
-  osc.connect(g).connect(audioCtx.destination);
-  osc.start();
-  osc.stop(audioCtx.currentTime+0.32);
+  osc.connect(g).connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime+0.32);
 }
-
 function playCrash() {
   const src = audioCtx.createBufferSource();
   const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.9, audioCtx.sampleRate);
   const data = buf.getChannelData(0);
   for (let i=0; i<buf.length; i++) data[i] = Math.random()*2-1;
   src.buffer = buf;
-  const g = audioCtx.createGain();
-  g.gain.setValueAtTime(0.75, audioCtx.currentTime);
+  const g = audioCtx.createGain(); g.gain.setValueAtTime(0.75, audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+1);
-  src.connect(g).connect(audioCtx.destination);
-  src.start();
+  src.connect(g).connect(audioCtx.destination); src.start();
 }
 
 // Start
-window.onload = () => {
-  game = new Phaser.Game(config);
-};
+window.onload = () => { game = new Phaser.Game(config); };
 </script>
 </body>
 </html>
